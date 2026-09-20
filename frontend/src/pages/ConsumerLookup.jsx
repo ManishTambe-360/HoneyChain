@@ -1,12 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Contract, JsonRpcProvider, getAddress } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
+import { QRCodeSVG } from "qrcode.react";
 
 function ConsumerLookup() {
-  const [batchId, setBatchId] = useState("");
+  const params = new URLSearchParams(window.location.search);
+  const initialBatchId = params.get("batchId") || "";
+
+  const [batchId, setBatchId] = useState(initialBatchId);
   const [batch, setBatch] = useState(null);
   const [history, setHistory] = useState([]);
   const [status, setStatus] = useState("");
+
+  useEffect(() => {                              // ← the actual useEffect call
+    if (initialBatchId) {
+      handleSearch({ preventDefault: () => {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSearch(e) {
     e.preventDefault();
@@ -72,14 +83,20 @@ function ConsumerLookup() {
       {status && <p className="text-sm text-gray-600">{status}</p>}
 
       {batch && (
-        <div className="border-t border-gray-200 pt-4">
-          <h3 className="font-bold text-lg text-yellow-900 mb-2">Batch #{batchId}</h3>
+         <div className="border-t border-gray-200 pt-4">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-lg text-yellow-900">Batch #{batchId}</h3>
+                <QRCodeSVG
+                    value={`${window.location.origin}?batchId=${batchId}`}
+                    size={64}
+                />
+            </div>
           <div className="text-sm text-gray-700 space-y-1 mb-4">
             <p><span className="font-semibold">Apiary Location:</span> {batch.apiaryLocation}</p>
             <p><span className="font-semibold">Floral Source:</span> {batch.floralSource}</p>
             <p><span className="font-semibold">Quantity:</span> {batch.quantityKg} kg</p>
             <p><span className="font-semibold">Harvested:</span> {batch.harvestDate}</p>
-            <p><span className="font-semibold">Quality Tested:</span> {batch.qualityTested ? "✅ Yes" : "❌ Not yet"}</p>
+            <p><span className="font-semibold">Quality Tested:</span> {batch.qualityTested ? "Yes" : "Not yet"}</p>
             <p className="font-mono text-xs"><span className="font-semibold font-sans">Beekeeper:</span> {batch.beekeeper}</p>
           </div>
 
