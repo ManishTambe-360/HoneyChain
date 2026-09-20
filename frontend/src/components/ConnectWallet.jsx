@@ -35,13 +35,20 @@ function ConnectWallet({ onConnect }) {
       const checksummedContractAddress = getAddress(CONTRACT_ADDRESS.toLowerCase());
       const contract = new Contract(checksummedContractAddress, CONTRACT_ABI, provider);
       const checksummedAccount = getAddress(connectedAccount.toLowerCase());
-      const roleIndex = await contract.roles(checksummedAccount);
+
+      const [roleIndex, adminAddress] = await Promise.all([
+        contract.roles(checksummedAccount),
+        contract.admin(),
+      ]);
+
+      const isAdmin = checksummedAccount.toLowerCase() === adminAddress.toLowerCase();
+      const resolvedRole = isAdmin ? "Admin" : ROLE_NAMES[Number(roleIndex)];
 
       setAccount(connectedAccount);
-      setRole(ROLE_NAMES[Number(roleIndex)]);
+      setRole(resolvedRole);
 
       if (onConnect) {
-        onConnect({ account: connectedAccount, role: ROLE_NAMES[Number(roleIndex)], provider });
+        onConnect({ account: connectedAccount, role: resolvedRole, provider });
       }
     } catch (err) {
       console.error(err);

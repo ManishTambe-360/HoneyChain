@@ -3,6 +3,7 @@ import ConnectWallet from "./components/ConnectWallet";
 import BeekeeperDashboard from "./pages/BeekeeperDashboard";
 import LabProcessorPortal from "./pages/LabProcessorPortal";
 import ConsumerLookup from "./pages/ConsumerLookup";
+import AdminPanel from "./pages/AdminPanel";
 
 function App() {
   const [connection, setConnection] = useState(null);
@@ -16,11 +17,15 @@ function App() {
       <h1 className="text-3xl font-bold text-yellow-800">HoneyChain</h1>
       <ConnectWallet onConnect={handleConnect} />
 
+      {connection && connection.account?.toLowerCase() === "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266" && (
+        <AdminPanel connection={connection} />
+      )}
+
       {connection && connection.role === "Beekeeper" && (
         <BeekeeperDashboard connection={connection} />
       )}
 
-      {connection && (connection.role === "Lab" || connection.role === "Processor") && (
+      {connection && ["Lab", "Processor", "Distributor"].includes(connection.role) && (
         <LabProcessorPortal connection={connection} />
       )}
 
