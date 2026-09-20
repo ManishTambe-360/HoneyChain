@@ -2,6 +2,7 @@ import { useState } from "react";
 import ConnectWallet from "./components/ConnectWallet";
 import BeekeeperDashboard from "./pages/BeekeeperDashboard";
 import LabProcessorPortal from "./pages/LabProcessorPortal";
+import ConsumerLookup from "./pages/ConsumerLookup";
 
 function App() {
   const [connection, setConnection] = useState(null);
@@ -23,12 +24,9 @@ function App() {
         <LabProcessorPortal connection={connection} />
       )}
 
-      {connection && !["Beekeeper", "Lab", "Processor"].includes(connection.role) && (
-        <p className="text-gray-600 mt-4">
-          Connected as <span className="font-semibold">{connection.role}</span>.
-          No dashboard available for this role yet.
-        </p>
-      )}
+      <div className="w-full max-w-lg border-t border-yellow-300 pt-6 mt-2">
+        <ConsumerLookup />
+      </div>
     </div>
   );
 }
