@@ -73,6 +73,33 @@ describe("HoneyChain", function () {
     expect(history[0].actor).to.equal(lab.address);
   });
 
+    it("should NOT allow a Processor to log a QualityTested event", async function () {
+    const { honeyChain, beekeeper, lab } = await deployFixture();
+    const [, , , processor] = await ethers.getSigners();
+
+    await honeyChain.registerParticipant(beekeeper.address, Role.Beekeeper);
+    await honeyChain.registerParticipant(processor.address, Role.Processor);
+    await honeyChain.connect(beekeeper).createBatch("Nilgiris, TN", "Wildflower", 50);
+
+    await expect(
+      honeyChain.connect(processor).logEvent(1, "QualityTested", "QmFakeHash")
+    ).to.be.revertedWith("Only Lab can log QualityTested events");
+  });
+
+  it("should allow a registered Distributor to log a Shipped event", async function () {
+    const { honeyChain, beekeeper } = await deployFixture();
+    const [, , , , distributor] = await ethers.getSigners();
+
+    await honeyChain.registerParticipant(beekeeper.address, Role.Beekeeper);
+    await honeyChain.registerParticipant(distributor.address, Role.Distributor);
+    await honeyChain.connect(beekeeper).createBatch("Nilgiris, TN", "Wildflower", 50);
+
+    await honeyChain.connect(distributor).logEvent(1, "Shipped", "Truck#45");
+
+    const [, history] = await honeyChain.getBatchDetails(1);
+    expect(history[0].eventType).to.equal("Shipped");
+  });
+
   it("should NOT allow an unregistered address to log an event", async function () {
     const { honeyChain, beekeeper, outsider } = await deployFixture();
     await honeyChain.registerParticipant(beekeeper.address, Role.Beekeeper);
@@ -94,13 +121,17 @@ describe("HoneyChain", function () {
 
   it("should keep a full, growing, append-only history of events", async function () {
     const { honeyChain, beekeeper, lab } = await deployFixture();
+    const [, , , processor, distributor] = await ethers.getSigners();
+
     await honeyChain.registerParticipant(beekeeper.address, Role.Beekeeper);
     await honeyChain.registerParticipant(lab.address, Role.Lab);
+    await honeyChain.registerParticipant(processor.address, Role.Processor);
+    await honeyChain.registerParticipant(distributor.address, Role.Distributor);
     await honeyChain.connect(beekeeper).createBatch("Nilgiris, TN", "Wildflower", 50);
 
     await honeyChain.connect(lab).logEvent(1, "QualityTested", "QmHash1");
-    await honeyChain.connect(lab).logEvent(1, "Processed", "QmHash2");
-    await honeyChain.connect(lab).logEvent(1, "Shipped", "Truck#45");
+    await honeyChain.connect(processor).logEvent(1, "Processed", "QmHash2");
+    await honeyChain.connect(distributor).logEvent(1, "Shipped", "Truck#45");
 
     const count = await honeyChain.getEventCount(1);
     expect(count).to.equal(3);

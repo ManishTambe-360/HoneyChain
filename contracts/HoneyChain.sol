@@ -95,7 +95,19 @@ contract HoneyChain {
         string memory _eventType,
         string memory _details
     ) external batchExists(_batchId) {
-        require(roles[msg.sender] != Role.None, "Not a registered participant");
+        Role senderRole = roles[msg.sender];
+        require(senderRole != Role.None, "Not a registered participant");
+
+        bytes32 eventHash = keccak256(bytes(_eventType));
+
+        if (eventHash == keccak256(bytes("QualityTested"))) {
+            require(senderRole == Role.Lab, "Only Lab can log QualityTested events");
+            batches[_batchId].qualityTested = true;
+        } else if (eventHash == keccak256(bytes("Processed"))) {
+            require(senderRole == Role.Processor, "Only Processor can log Processed events");
+        } else if (eventHash == keccak256(bytes("Shipped"))) {
+            require(senderRole == Role.Distributor, "Only Distributor can log Shipped events");
+        }
 
         batchHistory[_batchId].push(Event({
             eventType: _eventType,
@@ -103,10 +115,6 @@ contract HoneyChain {
             details: _details,
             timestamp: block.timestamp
         }));
-
-        if (keccak256(bytes(_eventType)) == keccak256(bytes("QualityTested"))) {
-            batches[_batchId].qualityTested = true;
-        }
 
         emit EventLogged(_batchId, _eventType, msg.sender);
     }
