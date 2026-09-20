@@ -1,6 +1,6 @@
 // AUTO-GENERATED FILE — do not edit manually.
 // Regenerate with: npx hardhat run scripts/exportAbi.ts
-export const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa";
+export const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 export const CONTRACT_ABI = [
   {
