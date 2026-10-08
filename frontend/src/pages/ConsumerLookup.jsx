@@ -3,35 +3,38 @@ import { Contract, JsonRpcProvider, getAddress } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
 import { QRCodeSVG } from "qrcode.react";
 
-function ConsumerLookup() {
+function ConsumerLookup({ jumpToBatchId }) {
   const params = new URLSearchParams(window.location.search);
-  const initialBatchId = params.get("batchId") || "";
+  const urlBatchId = params.get("batchId") || "";
+  const initialBatchId = jumpToBatchId || urlBatchId;
 
   const [batchId, setBatchId] = useState(initialBatchId);
   const [batch, setBatch] = useState(null);
   const [history, setHistory] = useState([]);
   const [status, setStatus] = useState("");
 
-  useEffect(() => {                              // ← the actual useEffect call
-    if (initialBatchId) {
-      handleSearch({ preventDefault: () => {} });
+  useEffect(() => {
+  
+    if (jumpToBatchId) {
+      setBatchId(jumpToBatchId.toString());
+      handleSearch({ preventDefault: () => {} }, jumpToBatchId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [jumpToBatchId]);
 
-  async function handleSearch(e) {
+  async function handleSearch(e, overrideId) {
     e.preventDefault();
     setStatus("Searching...");
     setBatch(null);
     setHistory([]);
 
+    const idToSearch = overrideId ?? batchId;
+
     try {
-      // Read-only lookup — no wallet needed, connects directly to the local node
       const provider = new JsonRpcProvider("http://127.0.0.1:8545");
       const checksummedContractAddress = getAddress(CONTRACT_ADDRESS.toLowerCase());
       const contract = new Contract(checksummedContractAddress, CONTRACT_ABI, provider);
 
-      const [batchData, eventHistory] = await contract.getBatchDetails(Number(batchId));
+      const [batchData, eventHistory] = await contract.getBatchDetails(Number(idToSearch));
 
       setBatch({
         apiaryLocation: batchData.apiaryLocation,

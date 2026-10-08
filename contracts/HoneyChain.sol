@@ -133,4 +133,8 @@ contract HoneyChain {
     function getEventCount(uint256 _batchId) external view returns (uint256) {
         return batchHistory[_batchId].length;
     }
+    /// @notice Returns the total number of batches created so far.
+function getTotalBatches() external view returns (uint256) {
+    return nextBatchId - 1;
+}
 }
