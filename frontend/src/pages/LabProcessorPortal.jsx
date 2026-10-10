@@ -8,27 +8,57 @@ function LabProcessorPortal({ connection }) {
   const [batchId, setBatchId] = useState("");
   const [eventType, setEventType] = useState(EVENT_TYPES[0]);
   const [details, setDetails] = useState("");
+  const [file, setFile] = useState(null);
   const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function uploadToIPFS() {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("http://localhost:4000/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error("IPFS upload failed");
+    const data = await response.json();
+    return data.ipfsHash;
+  }
 
   async function handleLogEvent(e) {
     e.preventDefault();
-    setStatus("Waiting for confirmation in MetaMask...");
+    const form = e.target;
+    setBusy(true);
 
     try {
+      let finalDetails = details;
+
+      if (file) {
+        setStatus("Uploading file to IPFS...");
+        const ipfsHash = await uploadToIPFS();
+        finalDetails = `${details} [IPFS: ${ipfsHash}]`;
+      }
+
+      setStatus("Waiting for confirmation in MetaMask...");
       const signer = await connection.provider.getSigner();
       const checksummedContractAddress = getAddress(CONTRACT_ADDRESS.toLowerCase());
       const contract = new Contract(checksummedContractAddress, CONTRACT_ABI, signer);
 
-      const tx = await contract.logEvent(Number(batchId), eventType, details);
+      const tx = await contract.logEvent(Number(batchId), eventType, finalDetails);
 
       setStatus("Transaction sent, waiting for it to be mined...");
       await tx.wait();
 
       setStatus(`Event "${eventType}" logged successfully for Batch #${batchId}!`);
       setDetails("");
+      setFile(null);
+      form.reset();
     } catch (err) {
       console.error(err);
       setStatus("Failed to log event. See console for details.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -75,11 +105,21 @@ function LabProcessorPortal({ connection }) {
           />
         </div>
 
+        <div>
+          <label className="text-sm font-medium text-gray-700">Attach File (optional)</label>
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files[0] || null)}
+            className="w-full border border-gray-300 rounded px-3 py-2 mt-1 text-sm"
+          />
+        </div>
+
         <button
           type="submit"
-          className="bg-yellow-700 text-white px-4 py-2 rounded-lg font-semibold hover:bg-yellow-800 transition mt-2"
+          disabled={busy}
+          className="bg-yellow-700 text-white px-4 py-2 rounded-lg font-semibold hover:bg-yellow-800 transition mt-2 disabled:opacity-50"
         >
-          Log Event
+          {busy ? "Working..." : "Log Event"}
         </button>
       </form>
 

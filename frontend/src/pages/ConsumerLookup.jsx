@@ -3,6 +3,27 @@ import { Contract, JsonRpcProvider, getAddress } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
 import { QRCodeSVG } from "qrcode.react";
 
+function renderDetails(text) {
+  const match = text.match(/\[IPFS: (\w+)\]/);
+  if (!match) return text;
+
+  const cid = match[1];
+  const before = text.replace(match[0], "").trim();
+
+  return (
+    <>
+      {before}{" "}
+      <a
+        href={`https://gateway.pinata.cloud/ipfs/${cid}`}
+        target="_blank"
+        rel="noreferrer"
+        className="text-yellow-700 underline"
+      >
+        📎 View attached file
+      </a>
+    </>
+  );
+}
 function ConsumerLookup({ jumpToBatchId }) {
   const params = new URLSearchParams(window.location.search);
   const urlBatchId = params.get("batchId") || "";
@@ -112,7 +133,7 @@ function ConsumerLookup({ jumpToBatchId }) {
               <div key={idx} className="border-l-4 border-yellow-600 pl-3">
                 <p className="font-semibold text-yellow-800">{ev.eventType}</p>
                 <p className="text-xs text-gray-600">{ev.timestamp}</p>
-                <p className="text-sm text-gray-700">{ev.details}</p>
+                <p className="text-sm text-gray-700">{renderDetails(ev.details)}</p>
                 <p className="text-xs font-mono text-gray-400">by {ev.actor.slice(0, 6)}...{ev.actor.slice(-4)}</p>
               </div>
             ))}
