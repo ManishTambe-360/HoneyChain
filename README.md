@@ -56,13 +56,13 @@ cd frontend
 npm run dev
 ```
 
-In separate terminal, move to backend folder and deploye node.js server
+In separate terminal, move to backend folder and deploy the node.js server
 ```shell
 cd backend
 node server.js
 ```
 
-##Deployment on TestNet
+## Deployment on TestNet
 ### Make a deployment to Sepolia
 
 This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
