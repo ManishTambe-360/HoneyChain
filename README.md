@@ -8,10 +8,10 @@ To learn more about Hardhat 3, please visit the [Getting Started guide](https://
 
 This project includes:
 
--A fully working Smart Contract built for this blockchain
--Admin,Beekeeper,Lab,Processor,Distributors roles and a default consumer roles
--Secure File Transfers for reports using PINATA IPFS . Reports are hashed to maintain integrity
--A fully funtional full stack web Applications to interact with this blockcahin.
+- A fully working Smart Contract built for this blockchain
+- Admin,Beekeeper,Lab,Processor,Distributors roles and a default consumer roles
+- Secure File Transfers for reports using PINATA IPFS . Reports are hashed to maintain integrity
+- A fully funtional full stack web Applications to interact with this blockcahin.
 
 ## Usage
 ### Setup
