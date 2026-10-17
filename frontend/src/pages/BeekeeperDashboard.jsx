@@ -54,7 +54,7 @@ function BeekeeperDashboard({ connection }) {
   }
 
   return (
-    <div className="bg-white border border-yellow-300 rounded-lg p-6 w-full max-w-md">
+    <div className="bg-white/80 backdrop-blur-md border border-white shadow-lg shadow-yellow-800/10 rounded-2xl p-6 w-full max-w-md">
       <h2 className="text-xl font-bold text-yellow-800 mb-4">Create a New Batch</h2>
 
       <form onSubmit={handleCreateBatch} className="flex flex-col gap-3">

@@ -34,6 +34,7 @@ function BrowseBatches({ onSelectBatch }) {
           quantityKg: batchData.quantityKg.toString(),
           qualityTested: batchData.qualityTested,
           harvestDate: new Date(Number(batchData.harvestDate) * 1000).toLocaleDateString(),
+          status: Number(batchData.status),
         });
       }
 
@@ -47,7 +48,7 @@ function BrowseBatches({ onSelectBatch }) {
   }
 
   return (
-    <div className="bg-white border border-yellow-300 rounded-lg p-6 w-full max-w-2xl">
+    <div className="bg-white/80 backdrop-blur-md border border-white shadow-lg shadow-yellow-800/10 rounded-2xl p-6 w-full max-w-2xl">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-yellow-800">All Batches</h2>
         <button
@@ -78,10 +79,14 @@ function BrowseBatches({ onSelectBatch }) {
             </div>
             <p className="text-sm text-gray-700">{b.apiaryLocation} — {b.floralSource} — {b.quantityKg}kg</p>
             <p className="text-xs mt-1">
-              {b.qualityTested ? (
-                <span className="text-green-700">✅ Quality Tested</span>
+              {b.status === 2 ? (
+                <span className="text-red-700 font-semibold">Recalled</span>
+              ) : b.status === 1 ? (
+                <span className="text-red-700 font-semibold">Failed quality test</span>
+              ) : b.qualityTested ? (
+                <span className="text-green-700">Quality tested</span>
               ) : (
-                <span className="text-gray-400">⏳ Not yet tested</span>
+                <span className="text-gray-500">Not yet tested</span>
               )}
             </p>
           </button>

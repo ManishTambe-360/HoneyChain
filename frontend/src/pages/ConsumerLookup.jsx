@@ -1,144 +1,301 @@
 import { useState, useEffect } from "react";
-import { Contract, JsonRpcProvider, getAddress } from "ethers";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
+import { Contract, JsonRpcProvider, getAddress, sha256, ZeroHash } from "ethers";
 import { QRCodeSVG } from "qrcode.react";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
+import Spinner from "../components/Spinner";
 
-function renderDetails(text) {
-  const match = text.match(/\[IPFS: (\w+)\]/);
-  if (!match) return text;
+const RPC_URL = "http://127.0.0.1:8545";
+const ROLE_NAMES = ["None", "Beekeeper", "Lab", "Processor", "Distributor"];
+const STAGES = ["Harvested", "Tested", "Processed", "Shipped"];
 
-  const cid = match[1];
-  const before = text.replace(match[0], "").trim();
+function parseDetails(text) {
+  const m = text.match(/\[IPFS: (\w+)\]/);
+  if (!m) return { note: text, fileUrl: null };
+  return {
+    note: text.replace(m[0], "").trim(),
+    fileUrl: `https://gateway.pinata.cloud/ipfs/${m[1]}`,
+  };
+}
 
+function Row({ label, children }) {
   return (
-    <>
-      {before}{" "}
-      <a
-        href={`https://gateway.pinata.cloud/ipfs/${cid}`}
-        target="_blank"
-        rel="noreferrer"
-        className="text-yellow-700 underline"
-      >
-        📎 View attached file
-      </a>
-    </>
+    <div className="flex flex-col items-center">
+      <dt className="text-gray-500">{label}</dt>
+      <dd className="min-w-0 text-center">{children}</dd>
+    </div>
   );
 }
+
+function RoleBadge({ role }) {
+  return <span className="font-semibold bg-yellow-100 px-1.5 py-0.5 rounded mr-2">{role}</span>;
+}
+
 function ConsumerLookup({ jumpToBatchId }) {
-  const params = new URLSearchParams(window.location.search);
-  const urlBatchId = params.get("batchId") || "";
+  const urlBatchId = new URLSearchParams(window.location.search).get("batchId") || "";
   const initialBatchId = jumpToBatchId || urlBatchId;
 
   const [batchId, setBatchId] = useState(initialBatchId);
   const [batch, setBatch] = useState(null);
   const [history, setHistory] = useState([]);
   const [status, setStatus] = useState("");
+  const [searchedId, setSearchedId] = useState("");
+  const [checks, setChecks] = useState({});
 
   useEffect(() => {
-  
     if (jumpToBatchId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBatchId(jumpToBatchId.toString());
-      handleSearch({ preventDefault: () => {} }, jumpToBatchId);
+      loadBatch(jumpToBatchId);
+    } else if (urlBatchId) {
+      loadBatch(urlBatchId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpToBatchId]);
 
-  async function handleSearch(e, overrideId) {
-    e.preventDefault();
-    setStatus("Searching...");
-    setBatch(null);
-    setHistory([]);
+  // Live updates: refresh whenever a new event is logged for the open batch
+  useEffect(() => {
+    if (!searchedId) return;
+    const provider = new JsonRpcProvider(RPC_URL);
+    const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
+    contract.on("EventLogged", (bid) => {
+      if (Number(bid) === Number(searchedId)) loadBatch(searchedId, true);
+    });
+    return () => {
+      contract.removeAllListeners();
+      provider.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchedId]);
 
-    const idToSearch = overrideId ?? batchId;
+  async function loadBatch(rawId, silent = false) {
+    const id = Number(rawId);
+    if (!silent) {
+      setStatus("loading");
+      setBatch(null);
+      setHistory([]);
+      setChecks({});
+    }
 
     try {
-      const provider = new JsonRpcProvider("http://127.0.0.1:8545");
-      const checksummedContractAddress = getAddress(CONTRACT_ADDRESS.toLowerCase());
-      const contract = new Contract(checksummedContractAddress, CONTRACT_ABI, provider);
+      const provider = new JsonRpcProvider(RPC_URL);
+      const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
 
-      const [batchData, eventHistory] = await contract.getBatchDetails(Number(idToSearch));
+      const [b, events] = await contract.getBatchDetails(id);
+
+      const [eventLogs, createdLogs] = await Promise.all([
+        contract.queryFilter(contract.filters.EventLogged(id), 0, "latest").catch(() => []),
+        contract.queryFilter(contract.filters.BatchCreated(id), 0, "latest").catch(() => []),
+      ]);
+
+      const roles = await Promise.all(
+        events.map(async (ev) => ROLE_NAMES[Number(await contract.roles(ev.actor))])
+      );
 
       setBatch({
-        apiaryLocation: batchData.apiaryLocation,
-        floralSource: batchData.floralSource,
-        harvestDate: new Date(Number(batchData.harvestDate) * 1000).toLocaleString(),
-        quantityKg: batchData.quantityKg.toString(),
-        qualityTested: batchData.qualityTested,
-        beekeeper: batchData.beekeeper,
+        location: b.apiaryLocation,
+        floral: b.floralSource,
+        harvested: new Date(Number(b.harvestDate) * 1000).toLocaleDateString(),
+        kg: b.quantityKg.toString(),
+        tested: b.qualityTested,
+        beekeeper: b.beekeeper,
+        stage: Number(b.stage),
+        status: Number(b.status),
+        txHash: createdLogs[0]?.transactionHash || "",
       });
 
       setHistory(
-        eventHistory.map((ev) => ({
-          eventType: ev.eventType,
+        events.map((ev, i) => ({
+          rawType: ev.eventType,
+          type: ev.eventType.replace(/([a-z])([A-Z])/g, "$1 $2"),
           actor: ev.actor,
-          details: ev.details,
-          timestamp: new Date(Number(ev.timestamp) * 1000).toLocaleString(),
+          role: ev.eventType === "Recalled" ? "Admin" : roles[i],
+          time: new Date(Number(ev.timestamp) * 1000).toLocaleString(),
+          txHash: eventLogs[i]?.transactionHash || "",
+          docHash: ev.docHash,
+          hasDoc: ev.docHash !== ZeroHash,
+          ...parseDetails(ev.details),
         }))
       );
 
+      setSearchedId(id.toString());
       setStatus("");
+      provider.destroy();
     } catch (err) {
       console.error(err);
-      setStatus("Batch not found, or an error occurred.");
+      if (!silent) setStatus("notfound");
     }
   }
 
-  return (
-    <div className="bg-white border border-yellow-300 rounded-lg p-6 w-full max-w-lg">
-      <h2 className="text-xl font-bold text-yellow-800 mb-4">Verify Your Honey</h2>
+  function handleSearch(e) {
+    e.preventDefault();
+    loadBatch(batchId);
+  }
 
-      <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+  async function checkFile(index, file, onChainHash) {
+    if (!file) return;
+    const hash = sha256(new Uint8Array(await file.arrayBuffer()));
+    setChecks((c) => ({ ...c, [index]: { ok: hash === onChainHash.toLowerCase(), name: file.name } }));
+  }
+
+  const recallReason = history.find((h) => h.rawType === "Recalled")?.note;
+
+  return (
+    <div className="w-full flex flex-col items-center gap-6 text-center">
+      <form onSubmit={handleSearch} className="flex gap-2 w-full max-w-md">
         <input
           type="number"
+          min="1"
+          required
           value={batchId}
           onChange={(e) => setBatchId(e.target.value)}
-          placeholder="Enter Batch ID"
-          required
-          min="1"
-          className="flex-1 border border-gray-300 rounded px-3 py-2"
+          placeholder="Batch number from the jar"
+          className="flex-1 border border-white bg-white/80 backdrop-blur rounded-full px-5 py-2 shadow-sm"
         />
-        <button
-          type="submit"
-          className="bg-yellow-700 text-white px-4 py-2 rounded-lg font-semibold hover:bg-yellow-800 transition"
-        >
-          Search
+        <button className="bg-gradient-to-b from-yellow-700 to-yellow-800 text-white px-6 py-2 rounded-full font-semibold shadow-md shadow-yellow-800/25 hover:brightness-110 transition">
+          Verify
         </button>
       </form>
 
-      {status && <p className="text-sm text-gray-600">{status}</p>}
+      {status === "loading" && <Spinner text="Reading the blockchain..." />}
+      {status === "notfound" && (
+        <p className="text-sm text-red-700">
+          No batch found with that number. Check the number on the jar and try again.
+        </p>
+      )}
+      {!batch && !status && (
+        <p className="text-gray-600 text-sm max-w-md">
+          Enter the batch number printed on your jar to see where the honey came from and who handled it.
+        </p>
+      )}
 
       {batch && (
-         <div className="border-t border-gray-200 pt-4">
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="font-bold text-lg text-yellow-900">Batch #{batchId}</h3>
-                <QRCodeSVG
-                    value={`${window.location.origin}?batchId=${batchId}`}
-                    size={64}
-                />
+        <section className="w-full max-w-2xl rounded-3xl overflow-hidden border border-white bg-white/85 backdrop-blur-md shadow-2xl shadow-yellow-800/20">
+          {batch.status === 1 && (
+            <div className="bg-red-700 text-white px-6 py-3 text-sm font-semibold">
+              This batch failed its quality test and must not be sold.
             </div>
-          <div className="text-sm text-gray-700 space-y-1 mb-4">
-            <p><span className="font-semibold">Apiary Location:</span> {batch.apiaryLocation}</p>
-            <p><span className="font-semibold">Floral Source:</span> {batch.floralSource}</p>
-            <p><span className="font-semibold">Quantity:</span> {batch.quantityKg} kg</p>
-            <p><span className="font-semibold">Harvested:</span> {batch.harvestDate}</p>
-            <p><span className="font-semibold">Quality Tested:</span> {batch.qualityTested ? "Yes" : "Not yet"}</p>
-            <p className="font-mono text-xs"><span className="font-semibold font-sans">Beekeeper:</span> {batch.beekeeper}</p>
+          )}
+          {batch.status === 2 && (
+            <div className="bg-red-700 text-white px-6 py-3 text-sm">
+              <p className="font-semibold">This batch has been recalled.</p>
+              {recallReason && <p className="mt-1">Reason: {recallReason}</p>}
+            </div>
+          )}
+
+          <div className="relative bg-gradient-to-br from-[#F8CF73] via-yellow-600 to-[#D98A1C] px-6 py-7 flex flex-col items-center gap-3">
+            <span className="absolute top-3 right-4 flex items-center gap-1.5 text-xs font-medium text-yellow-900">
+              <span className="w-2 h-2 rounded-full bg-yellow-900 animate-pulse" aria-hidden="true" />
+              Live
+            </span>
+            <div>
+              <p className="text-sm font-medium text-yellow-900">Batch</p>
+              <p className="font-display text-6xl font-bold leading-none text-yellow-900">#{searchedId}</p>
+            </div>
+            {batch.tested && batch.status === 0 && (
+              <span className="inline-flex items-center gap-2 bg-yellow-900 text-yellow-50 px-3 py-1 rounded-full text-sm font-medium">
+                <span className="hex w-3 h-3.5 bg-yellow-600" aria-hidden="true" />
+                Quality tested
+              </span>
+            )}
+            <div className="bg-white p-2 rounded-lg">
+              <QRCodeSVG value={`${window.location.origin}?batchId=${searchedId}`} size={84} />
+            </div>
           </div>
 
-          <h4 className="font-bold text-yellow-900 mb-2">Supply Chain Timeline</h4>
-          <div className="space-y-3">
-            {history.length === 0 && (
-              <p className="text-sm text-gray-500">No events logged yet.</p>
-            )}
-            {history.map((ev, idx) => (
-              <div key={idx} className="border-l-4 border-yellow-600 pl-3">
-                <p className="font-semibold text-yellow-800">{ev.eventType}</p>
-                <p className="text-xs text-gray-600">{ev.timestamp}</p>
-                <p className="text-sm text-gray-700">{renderDetails(ev.details)}</p>
-                <p className="text-xs font-mono text-gray-400">by {ev.actor.slice(0, 6)}...{ev.actor.slice(-4)}</p>
-              </div>
-            ))}
+          <div className="p-6 flex flex-col gap-6">
+            <ol className="flex justify-center gap-2" aria-label="Batch progress">
+              {STAGES.map((s, i) => (
+                <li key={s} className="flex flex-col items-center gap-1 w-20">
+                  <span className={`hex w-7 h-8 ${i <= batch.stage ? "bg-yellow-600" : "bg-yellow-100"}`} aria-hidden="true" />
+                  <span className={`text-xs ${i <= batch.stage ? "font-semibold" : "text-gray-500"}`}>{s}</span>
+                </li>
+              ))}
+            </ol>
+
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm border-t border-yellow-300 pt-6">
+              <div><dt className="text-gray-500">Apiary</dt><dd className="font-medium">{batch.location}</dd></div>
+              <div><dt className="text-gray-500">Floral source</dt><dd className="font-medium">{batch.floral}</dd></div>
+              <div><dt className="text-gray-500">Harvested</dt><dd className="font-medium">{batch.harvested}</dd></div>
+              <div><dt className="text-gray-500">Quantity</dt><dd className="font-medium">{batch.kg} kg</dd></div>
+            </dl>
+
+            <dl className="text-xs flex flex-col gap-3 border-t border-yellow-300 pt-4">
+              <Row label="Harvested by">
+                <RoleBadge role="Beekeeper" />
+                <span className="font-mono break-all">{batch.beekeeper}</span>
+              </Row>
+              {batch.txHash && (
+                <Row label="Transaction">
+                  <span className="font-mono break-all">{batch.txHash}</span>
+                </Row>
+              )}
+            </dl>
+
+            <div className="border-t border-yellow-300 pt-6">
+              <h3 className="font-bold text-lg mb-5">Chain of custody</h3>
+              {history.length === 0 ? (
+                <p className="text-sm text-gray-600">Nobody has logged an event for this batch yet.</p>
+              ) : (
+                <ol className="relative flex flex-col items-center gap-6 before:content-[''] before:absolute before:left-1/2 before:top-3 before:bottom-3 before:w-0.5 before:-translate-x-1/2 before:bg-yellow-600">
+                  {history.map((ev, i) => (
+                    <li key={i} className="relative z-10 w-full flex flex-col items-center">
+                      <span className="hex w-6 h-7 bg-yellow-600" aria-hidden="true" />
+                      <div className="mt-2 w-full max-w-md bg-white border border-yellow-300/60 shadow-md shadow-yellow-800/10 rounded-xl px-5 py-4">
+                        <p className="font-semibold text-lg leading-tight">{ev.type}</p>
+                        <p className="text-xs text-gray-500">{ev.time}</p>
+                        <p className="text-sm mt-2">{ev.note}</p>
+
+                        {ev.fileUrl && (
+                          <a
+                            href={ev.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block mt-2 text-sm font-semibold text-yellow-700 underline decoration-2 decoration-yellow-600 underline-offset-4 hover:text-yellow-800"
+                          >
+                            View attached file
+                          </a>
+                        )}
+
+                        {ev.hasDoc && (
+                          <div className="mt-3 text-xs">
+                            <label className="cursor-pointer font-semibold text-yellow-700 underline decoration-2 decoration-yellow-600 underline-offset-4 hover:text-yellow-800">
+                              Check a file against this record
+                              <input type="file" className="hidden" onChange={(e) => checkFile(i, e.target.files[0], ev.docHash)} />
+                            </label>
+                            {checks[i] && (
+                              <p className={`mt-2 font-semibold ${checks[i].ok ? "text-green-700" : "text-red-700"}`}>
+                                {checks[i].ok
+                                  ? `${checks[i].name} matches the blockchain record.`
+                                  : `${checks[i].name} does NOT match. This is not the original document.`}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        <dl className="text-xs flex flex-col gap-3 mt-4 pt-3 border-t border-yellow-300">
+                          <Row label="Logged by">
+                            <RoleBadge role={ev.role} />
+                            <span className="font-mono break-all">{ev.actor}</span>
+                          </Row>
+                          {ev.hasDoc && (
+                            <Row label="Document hash (SHA-256)">
+                              <span className="font-mono break-all">{ev.docHash}</span>
+                            </Row>
+                          )}
+                          {ev.txHash && (
+                            <Row label="Transaction">
+                              <span className="font-mono break-all">{ev.txHash}</span>
+                            </Row>
+                          )}
+                        </dl>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

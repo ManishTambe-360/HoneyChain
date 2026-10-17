@@ -2,13 +2,15 @@
 pragma solidity ^0.8.20;
 
 /// @title HoneyChain
-/// @notice Tracks honey batches from hive to consumer with tamper-evident,
-///         role-gated event logging on-chain.
+/// @notice Honey traceability with enforced stage order, fail/recall flags,
+///         and on-chain document hashes for tamper checks.
 contract HoneyChain {
 
     address public admin;
 
     enum Role { None, Beekeeper, Lab, Processor, Distributor }
+    enum Stage { Harvested, Tested, Processed, Shipped }
+    enum Status { Active, Failed, Recalled }
 
     mapping(address => Role) public roles;
 
@@ -21,14 +23,22 @@ contract HoneyChain {
         uint256 quantityKg;
         bool qualityTested;
         bool exists;
+        Stage stage;
+        Status status;
     }
 
     struct Event {
-        string eventType;   // "QualityTested", "Processed", "Shipped", etc.
+        string eventType;
         address actor;
-        string details;     // free text OR an IPFS hash of supporting doc
+        string details;
+        bytes32 docHash;    // SHA-256 of the attached document, or zero if none
         uint256 timestamp;
     }
+
+    bytes32 private constant QUALITY_TESTED = keccak256("QualityTested");
+    bytes32 private constant QUALITY_FAILED = keccak256("QualityFailed");
+    bytes32 private constant PROCESSED = keccak256("Processed");
+    bytes32 private constant SHIPPED = keccak256("Shipped");
 
     mapping(uint256 => Batch) public batches;
     mapping(uint256 => Event[]) public batchHistory;
@@ -37,6 +47,7 @@ contract HoneyChain {
     event ParticipantRegistered(address indexed participant, Role role);
     event BatchCreated(uint256 indexed batchId, address indexed beekeeper, string location);
     event EventLogged(uint256 indexed batchId, string eventType, address indexed actor);
+    event BatchStatusChanged(uint256 indexed batchId, Status status);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this action");
@@ -57,14 +68,12 @@ contract HoneyChain {
         admin = msg.sender;
     }
 
-    /// @notice Admin registers a participant with a specific role.
     function registerParticipant(address _addr, Role _role) external onlyAdmin {
         require(_addr != address(0), "Invalid address");
         roles[_addr] = _role;
         emit ParticipantRegistered(_addr, _role);
     }
 
-    /// @notice Beekeeper creates a new honey batch record.
     function createBatch(
         string memory _apiaryLocation,
         string memory _floralSource,
@@ -82,44 +91,87 @@ contract HoneyChain {
             harvestDate: block.timestamp,
             quantityKg: _quantityKg,
             qualityTested: false,
-            exists: true
+            exists: true,
+            stage: Stage.Harvested,
+            status: Status.Active
         });
 
         emit BatchCreated(id, msg.sender, _apiaryLocation);
         return id;
     }
 
-    /// @notice Any registered participant logs a supply-chain event against a batch.
+    /// @notice Log a supply-chain event. Stage order and role are enforced.
+    /// @param _docHash SHA-256 of an attached document, or bytes32(0) for none.
     function logEvent(
         uint256 _batchId,
         string memory _eventType,
-        string memory _details
+        string memory _details,
+        bytes32 _docHash
     ) external batchExists(_batchId) {
         Role senderRole = roles[msg.sender];
         require(senderRole != Role.None, "Not a registered participant");
+        require(batches[_batchId].status == Status.Active, "Batch is not active");
 
-        bytes32 eventHash = keccak256(bytes(_eventType));
-
-        if (eventHash == keccak256(bytes("QualityTested"))) {
-            require(senderRole == Role.Lab, "Only Lab can log QualityTested events");
-            batches[_batchId].qualityTested = true;
-        } else if (eventHash == keccak256(bytes("Processed"))) {
-            require(senderRole == Role.Processor, "Only Processor can log Processed events");
-        } else if (eventHash == keccak256(bytes("Shipped"))) {
-            require(senderRole == Role.Distributor, "Only Distributor can log Shipped events");
-        }
+        _applyEvent(_batchId, keccak256(bytes(_eventType)), senderRole);
 
         batchHistory[_batchId].push(Event({
             eventType: _eventType,
             actor: msg.sender,
             details: _details,
+            docHash: _docHash,
             timestamp: block.timestamp
         }));
 
         emit EventLogged(_batchId, _eventType, msg.sender);
     }
 
-    /// @notice Public read-only lookup — no wallet or gas required to call.
+    function _applyEvent(uint256 _batchId, bytes32 t, Role senderRole) internal {
+        Batch storage b = batches[_batchId];
+
+        if (t == QUALITY_TESTED) {
+            require(senderRole == Role.Lab, "Only Lab can log QualityTested events");
+            require(b.stage == Stage.Harvested, "Batch must be at Harvested stage");
+            b.stage = Stage.Tested;
+            b.qualityTested = true;
+        } else if (t == QUALITY_FAILED) {
+            require(senderRole == Role.Lab, "Only Lab can log QualityFailed events");
+            require(b.stage == Stage.Harvested, "Batch must be at Harvested stage");
+            b.status = Status.Failed;
+            emit BatchStatusChanged(_batchId, Status.Failed);
+        } else if (t == PROCESSED) {
+            require(senderRole == Role.Processor, "Only Processor can log Processed events");
+            require(b.stage == Stage.Tested, "Batch must be quality tested first");
+            b.stage = Stage.Processed;
+        } else if (t == SHIPPED) {
+            require(senderRole == Role.Distributor, "Only Distributor can log Shipped events");
+            require(b.stage == Stage.Processed, "Batch must be processed first");
+            b.stage = Stage.Shipped;
+        } else {
+            revert("Unknown event type");
+        }
+    }
+
+    /// @notice Admin recalls a batch. The reason is recorded in the history.
+    function recallBatch(uint256 _batchId, string memory _reason)
+        external
+        onlyAdmin
+        batchExists(_batchId)
+    {
+        require(batches[_batchId].status != Status.Recalled, "Batch already recalled");
+        batches[_batchId].status = Status.Recalled;
+
+        batchHistory[_batchId].push(Event({
+            eventType: "Recalled",
+            actor: msg.sender,
+            details: _reason,
+            docHash: bytes32(0),
+            timestamp: block.timestamp
+        }));
+
+        emit BatchStatusChanged(_batchId, Status.Recalled);
+        emit EventLogged(_batchId, "Recalled", msg.sender);
+    }
+
     function getBatchDetails(uint256 _batchId)
         external
         view
@@ -129,12 +181,11 @@ contract HoneyChain {
         return (batches[_batchId], batchHistory[_batchId]);
     }
 
-    /// @notice Returns how many events exist for a batch (useful for frontend pagination).
     function getEventCount(uint256 _batchId) external view returns (uint256) {
         return batchHistory[_batchId].length;
     }
-    /// @notice Returns the total number of batches created so far.
-function getTotalBatches() external view returns (uint256) {
-    return nextBatchId - 1;
-}
+
+    function getTotalBatches() external view returns (uint256) {
+        return nextBatchId - 1;
+    }
 }

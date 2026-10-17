@@ -71,21 +71,24 @@ function ConnectWallet({ onConnect }) {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-1">
       {!account ? (
         <button
           onClick={connectWallet}
-          className="bg-yellow-700 text-white px-4 py-2 rounded-lg font-semibold hover:bg-yellow-800 transition"
+          className="bg-gradient-to-b from-yellow-700 to-yellow-800 text-white px-6 py-2 rounded-full font-semibold shadow-md shadow-yellow-800/25 hover:brightness-110 transition"
         >
-          Connect Wallet
+          Connect wallet
         </button>
       ) : (
-        <div className="bg-white border border-yellow-300 rounded-lg px-4 py-2 text-sm">
-          <p className="font-mono">{account.slice(0, 6)}...{account.slice(-4)}</p>
-          <p className="text-yellow-800 font-semibold">Role: {role}</p>
+        <div className="flex items-center gap-2 border border-white bg-white/80 backdrop-blur rounded-full px-4 py-1.5 shadow-sm text-sm">
+          <span className="hex w-3 h-3.5 bg-yellow-600" aria-hidden="true" />
+          <span className="font-semibold">{role}</span>
+          <span className="font-mono text-xs text-gray-500">
+            {account.slice(0, 6)}...{account.slice(-4)}
+          </span>
         </div>
       )}
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-red-700 text-xs max-w-xs text-center">{error}</p>}
     </div>
   );
 }

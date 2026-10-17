@@ -44,6 +44,25 @@ export const CONTRACT_ABI = [
       },
       {
         "indexed": false,
+        "internalType": "enum HoneyChain.Status",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "name": "BatchStatusChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "batchId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
         "internalType": "string",
         "name": "eventType",
         "type": "string"
@@ -121,6 +140,11 @@ export const CONTRACT_ABI = [
         "type": "string"
       },
       {
+        "internalType": "bytes32",
+        "name": "docHash",
+        "type": "bytes32"
+      },
+      {
         "internalType": "uint256",
         "name": "timestamp",
         "type": "uint256"
@@ -178,6 +202,16 @@ export const CONTRACT_ABI = [
         "internalType": "bool",
         "name": "exists",
         "type": "bool"
+      },
+      {
+        "internalType": "enum HoneyChain.Stage",
+        "name": "stage",
+        "type": "uint8"
+      },
+      {
+        "internalType": "enum HoneyChain.Status",
+        "name": "status",
+        "type": "uint8"
       }
     ],
     "stateMutability": "view",
@@ -263,6 +297,16 @@ export const CONTRACT_ABI = [
             "internalType": "bool",
             "name": "exists",
             "type": "bool"
+          },
+          {
+            "internalType": "enum HoneyChain.Stage",
+            "name": "stage",
+            "type": "uint8"
+          },
+          {
+            "internalType": "enum HoneyChain.Status",
+            "name": "status",
+            "type": "uint8"
           }
         ],
         "internalType": "struct HoneyChain.Batch",
@@ -285,6 +329,11 @@ export const CONTRACT_ABI = [
             "internalType": "string",
             "name": "details",
             "type": "string"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "docHash",
+            "type": "bytes32"
           },
           {
             "internalType": "uint256",
@@ -348,6 +397,11 @@ export const CONTRACT_ABI = [
         "internalType": "string",
         "name": "_details",
         "type": "string"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "_docHash",
+        "type": "bytes32"
       }
     ],
     "name": "logEvent",
@@ -366,6 +420,24 @@ export const CONTRACT_ABI = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_batchId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_reason",
+        "type": "string"
+      }
+    ],
+    "name": "recallBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

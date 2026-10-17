@@ -1,25 +1,22 @@
 function Navbar({ connection, activeTab, setActiveTab }) {
   const tabs = [
-    { id: "dashboard", label: "Dashboard", roles: ["Admin", "Beekeeper", "Lab", "Processor", "Distributor"] },
-    { id: "browse", label: "All Batches", roles: ["Admin", "Beekeeper", "Lab", "Processor", "Distributor", "None"] },
-    { id: "consumer", label: "Verify Honey", roles: ["Admin", "Beekeeper", "Lab", "Processor", "Distributor", "None"] },
+    { id: "dashboard", label: "Dashboard", needsRole: true },
+    { id: "browse", label: "All batches" },
+    { id: "consumer", label: "Verify honey" },
   ];
 
-  const visibleTabs = tabs.filter((tab) => {
-    if (!connection) return tab.id === "consumer" || tab.id === "browse";
-    return tab.roles.includes(connection.role);
-  });
+  const visibleTabs = tabs.filter((t) => !t.needsRole || (connection && connection.role !== "None"));
 
   return (
-    <nav className="w-full max-w-4xl flex gap-2 border-b border-yellow-300 pb-2">
+    <nav className="inline-flex gap-1 p-1 rounded-full bg-white/55 backdrop-blur-md border border-white shadow-sm">
       {visibleTabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}
-          className={`px-4 py-2 rounded-t-lg font-semibold transition ${
+          className={`px-5 py-1.5 rounded-full text-sm font-medium transition-colors ${
             activeTab === tab.id
-              ? "bg-yellow-700 text-white"
-              : "bg-white text-yellow-800 hover:bg-yellow-100"
+              ? "bg-yellow-900 text-yellow-50 shadow"
+              : "text-gray-600 hover:text-yellow-900"
           }`}
         >
           {tab.label}
