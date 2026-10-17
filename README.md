@@ -14,20 +14,52 @@ This example project includes:
 - Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
 
 ## Usage
+### Setup
+Make sure to have metamask account and Pinata API key
+and paste it in env folder in backend if there isnt one MAKE one and put content in it acc to the .env example file given and put port=4000
 
 ### Running Tests
 
-To run all the tests in the project, execute the following command:
+To Run Test and Deploy the Contract
 
 ```shell
+npx hardhat compile
 npx hardhat test
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+Make sure all tests are runned and tested successfully
+Now run this,
+```shell
+npx hardhat run scripts/deploy.ts --network localhost
+```
+Copy Blockchain deployed address and paste in this command below and check if address length is 42 characters.
 
 ```shell
-npx hardhat test solidity
-npx hardhat test mocha
+$env:CONTRACT_ADDRESS="PASTE_HERE"
+($env:CONTRACT_ADDRESS).Length
+```
+Now deploy it
+```shell
+npx hardhat run scripts/seedRoles.ts --network localhost
+npx hardhat run scripts/exportAbi.ts
+```
+
+Now to Run everything
+In root folder in IDE in a terminal use this to activate the blockchain network
+```shell
+npx hardhat node
+```
+
+In separate terminal, move to frontend file and deploy the react server
+```shell
+cd frontend
+npm run dev
+```
+
+In separate terminal, move to backend folder and deploye node.js server
+```shell
+cd backend
+node server.js
 ```
 
 ### Make a deployment to Sepolia
