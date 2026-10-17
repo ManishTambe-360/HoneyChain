@@ -1,17 +1,17 @@
-# Sample Hardhat 3 Project (`mocha` and `ethers`)
+# HoneyChain(`mocha` and `ethers`)
 
-This project showcases a Hardhat 3 project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+This project showcases a blockchain system made for Beekeepers and consumers and any other professions involved in this to keep track of honey produced right from its harvesting phase till it reaches consumers to verify them . This is Hardhat 3 project using `mocha` for tests and the `ethers` library for Ethereum interactions.
 
 To learn more about Hardhat 3, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3](https://hardhat.org/hardhat3-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
 
 ## Project Overview
 
-This example project includes:
+This project includes:
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+-A fully working Smart Contract built for this blockchain
+-Admin,Beekeeper,Lab,Processor,Distributors roles and a default consumer roles
+-Secure File Transfers for reports using PINATA IPFS . Reports are hashed to maintain integrity
+-A fully funtional full stack web Applications to interact with this blockcahin.
 
 ## Usage
 ### Setup
