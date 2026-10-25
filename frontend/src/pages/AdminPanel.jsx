@@ -7,6 +7,7 @@ const ROLES = [
   { label: "Lab", value: 2 },
   { label: "Processor", value: 3 },
   { label: "Distributor", value: 4 },
+  { label: "No access (revoke)", value: 0 },
 ];
 
 function AdminPanel({ connection }) {

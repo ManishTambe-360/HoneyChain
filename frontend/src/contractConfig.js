@@ -1,12 +1,44 @@
-// AUTO-GENERATED FILE — do not edit manually.
+// AUTO-GENERATED FILE. Do not edit manually.
 // Regenerate with: npx hardhat run scripts/exportAbi.ts
 export const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+export const NETWORK = {
+  "name": "Hardhat Local",
+  "chainId": 31337,
+  "rpcUrl": "http://127.0.0.1:8545",
+  "explorerUrl": "",
+  "currency": {
+    "name": "Ether",
+    "symbol": "ETH",
+    "decimals": 18
+  },
+  "deployBlock": 0
+};
 
 export const CONTRACT_ABI = [
   {
     "inputs": [],
     "stateMutability": "nonpayable",
     "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousAdmin",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "AdminTransferred",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -433,6 +465,11 @@ export const CONTRACT_ABI = [
         "internalType": "string",
         "name": "_reason",
         "type": "string"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "_docHash",
+        "type": "bytes32"
       }
     ],
     "name": "recallBatch",
@@ -476,7 +513,18 @@ export const CONTRACT_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "transferAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
-
-export const HARDHAT_CHAIN_ID = 31337;

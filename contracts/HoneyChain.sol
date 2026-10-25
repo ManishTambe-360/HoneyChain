@@ -48,6 +48,7 @@ contract HoneyChain {
     event BatchCreated(uint256 indexed batchId, address indexed beekeeper, string location);
     event EventLogged(uint256 indexed batchId, string eventType, address indexed actor);
     event BatchStatusChanged(uint256 indexed batchId, Status status);
+    event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this action");
@@ -66,6 +67,13 @@ contract HoneyChain {
 
     constructor() {
         admin = msg.sender;
+    }
+
+    /// @notice Hand the admin role to another account (for example a multisig).
+    function transferAdmin(address _newAdmin) external onlyAdmin {
+        require(_newAdmin != address(0), "Invalid address");
+        emit AdminTransferred(admin, _newAdmin);
+        admin = _newAdmin;
     }
 
     function registerParticipant(address _addr, Role _role) external onlyAdmin {
@@ -152,7 +160,9 @@ contract HoneyChain {
     }
 
     /// @notice Admin recalls a batch. The reason is recorded in the history.
-    function recallBatch(uint256 _batchId, string memory _reason)
+    /// @notice Admin recalls a batch. The reason and an optional report hash
+    ///         are recorded in the history.
+    function recallBatch(uint256 _batchId, string memory _reason, bytes32 _docHash)
         external
         onlyAdmin
         batchExists(_batchId)
@@ -164,7 +174,7 @@ contract HoneyChain {
             eventType: "Recalled",
             actor: msg.sender,
             details: _reason,
-            docHash: bytes32(0),
+            docHash: _docHash,
             timestamp: block.timestamp
         }));
 

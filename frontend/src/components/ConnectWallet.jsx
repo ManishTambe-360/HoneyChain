@@ -1,8 +1,29 @@
 import { useState, useEffect } from "react";
-import { BrowserProvider, Contract, getAddress } from "ethers";
-import { CONTRACT_ADDRESS, CONTRACT_ABI, HARDHAT_CHAIN_ID } from "../contractConfig";
+import { BrowserProvider, Contract, getAddress, toQuantity } from "ethers";
+import { CONTRACT_ADDRESS, CONTRACT_ABI, NETWORK } from "../contractConfig";
 
 const ROLE_NAMES = ["None", "Beekeeper", "Lab", "Processor", "Distributor"];
+
+// Ask MetaMask to switch to the right network, adding it if it is unknown.
+async function ensureNetwork() {
+  const chainId = toQuantity(NETWORK.chainId);
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
+  } catch (err) {
+    const code = err?.code ?? err?.data?.originalError?.code;
+    if (code !== 4902 && code !== -32603) throw err;
+    await window.ethereum.request({
+      method: "wallet_addEthereumChain",
+      params: [{
+        chainId,
+        chainName: NETWORK.name,
+        nativeCurrency: NETWORK.currency,
+        rpcUrls: [NETWORK.rpcUrl],
+        ...(NETWORK.explorerUrl ? { blockExplorerUrls: [NETWORK.explorerUrl] } : {}),
+      }],
+    });
+  }
+}
 
 function ConnectWallet({ onConnect }) {
   const [account, setAccount] = useState(null);
@@ -18,22 +39,18 @@ function ConnectWallet({ onConnect }) {
     }
 
     try {
-      const provider = new BrowserProvider(window.ethereum);
-
-      // Ask MetaMask to connect
-      const accounts = await provider.send("eth_requestAccounts", []);
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const connectedAccount = accounts[0];
 
-      // Confirm we're on the right network
-      const network = await provider.getNetwork();
-      if (Number(network.chainId) !== HARDHAT_CHAIN_ID) {
-        setError(`Wrong network. Please switch MetaMask to Hardhat Local (Chain ID ${HARDHAT_CHAIN_ID}).`);
-        return;
+      const currentChain = parseInt(await window.ethereum.request({ method: "eth_chainId" }), 16);
+      if (currentChain !== NETWORK.chainId) {
+        await ensureNetwork();
       }
 
-      // Read this account's role from the contract
-      const checksummedContractAddress = getAddress(CONTRACT_ADDRESS.toLowerCase());
-      const contract = new Contract(checksummedContractAddress, CONTRACT_ABI, provider);
+      // Create the provider after any network switch so it sees the right chain
+      const provider = new BrowserProvider(window.ethereum);
+
+      const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
       const checksummedAccount = getAddress(connectedAccount.toLowerCase());
 
       const [roleIndex, adminAddress] = await Promise.all([
@@ -52,21 +69,18 @@ function ConnectWallet({ onConnect }) {
       }
     } catch (err) {
       console.error(err);
-      setError("Failed to connect wallet. See console for details.");
+      setError(err?.code === 4001 ? "Connection cancelled in MetaMask." : "Failed to connect wallet. See console for details.");
     }
   }
 
-  // Reload if the user switches accounts in MetaMask
   useEffect(() => {
     if (!window.ethereum) return;
-
-    function handleAccountsChanged() {
-      window.location.reload();
-    }
-
-    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    const reload = () => window.location.reload();
+    window.ethereum.on("accountsChanged", reload);
+    window.ethereum.on("chainChanged", reload);
     return () => {
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      window.ethereum.removeListener("accountsChanged", reload);
+      window.ethereum.removeListener("chainChanged", reload);
     };
   }, []);
 
@@ -88,6 +102,7 @@ function ConnectWallet({ onConnect }) {
           </span>
         </div>
       )}
+      <p className="text-xs text-gray-500">{NETWORK.name}</p>
       {error && <p className="text-red-700 text-xs max-w-xs text-center">{error}</p>}
     </div>
   );

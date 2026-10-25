@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { Contract, JsonRpcProvider, getAddress, sha256, ZeroHash } from "ethers";
 import { QRCodeSVG } from "qrcode.react";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
+import { CONTRACT_ADDRESS, CONTRACT_ABI, NETWORK } from "../contractConfig";
 import Spinner from "../components/Spinner";
 
-const RPC_URL = "http://127.0.0.1:8545";
 const ROLE_NAMES = ["None", "Beekeeper", "Lab", "Processor", "Distributor"];
 const STAGES = ["Harvested", "Tested", "Processed", "Shipped"];
 
@@ -15,6 +14,41 @@ function parseDetails(text) {
     note: text.replace(m[0], "").trim(),
     fileUrl: `https://gateway.pinata.cloud/ipfs/${m[1]}`,
   };
+}
+
+// Public RPCs often cap how many blocks a log search may cover.
+// Try one search first, then fall back to small chunks. If any chunk fails,
+// return nothing rather than a partial list that would misalign with events.
+async function getLogs(provider, contract, filter) {
+  const from = NETWORK.deployBlock || 0;
+  try {
+    return await contract.queryFilter(filter, from, "latest");
+  } catch {
+    try {
+      const latest = await provider.getBlockNumber();
+      const out = [];
+      for (let start = from; start <= latest; start += 2000) {
+        out.push(...(await contract.queryFilter(filter, start, Math.min(start + 1999, latest))));
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+}
+
+function Hash({ value, kind }) {
+  if (!NETWORK.explorerUrl) return <span className="font-mono break-all">{value}</span>;
+  return (
+    <a
+      href={`${NETWORK.explorerUrl}/${kind}/${value}`}
+      target="_blank"
+      rel="noreferrer"
+      className="font-mono break-all underline decoration-yellow-600 underline-offset-2 hover:text-yellow-700"
+    >
+      {value}
+    </a>
+  );
 }
 
 function Row({ label, children }) {
@@ -55,7 +89,7 @@ function ConsumerLookup({ jumpToBatchId }) {
   // Live updates: refresh whenever a new event is logged for the open batch
   useEffect(() => {
     if (!searchedId) return;
-    const provider = new JsonRpcProvider(RPC_URL);
+    const provider = new JsonRpcProvider(NETWORK.rpcUrl);
     const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
     contract.on("EventLogged", (bid) => {
       if (Number(bid) === Number(searchedId)) loadBatch(searchedId, true);
@@ -77,14 +111,14 @@ function ConsumerLookup({ jumpToBatchId }) {
     }
 
     try {
-      const provider = new JsonRpcProvider(RPC_URL);
+      const provider = new JsonRpcProvider(NETWORK.rpcUrl);
       const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
 
       const [b, events] = await contract.getBatchDetails(id);
 
       const [eventLogs, createdLogs] = await Promise.all([
-        contract.queryFilter(contract.filters.EventLogged(id), 0, "latest").catch(() => []),
-        contract.queryFilter(contract.filters.BatchCreated(id), 0, "latest").catch(() => []),
+        getLogs(provider, contract, contract.filters.EventLogged(id)),
+        getLogs(provider, contract, contract.filters.BatchCreated(id)),
       ]);
 
       const roles = await Promise.all(
@@ -110,7 +144,7 @@ function ConsumerLookup({ jumpToBatchId }) {
           actor: ev.actor,
           role: ev.eventType === "Recalled" ? "Admin" : roles[i],
           time: new Date(Number(ev.timestamp) * 1000).toLocaleString(),
-          txHash: eventLogs[i]?.transactionHash || "",
+          txHash: eventLogs.length === events.length ? eventLogs[i].transactionHash : "",
           docHash: ev.docHash,
           hasDoc: ev.docHash !== ZeroHash,
           ...parseDetails(ev.details),
@@ -137,7 +171,7 @@ function ConsumerLookup({ jumpToBatchId }) {
     setChecks((c) => ({ ...c, [index]: { ok: hash === onChainHash.toLowerCase(), name: file.name } }));
   }
 
-  const recallReason = history.find((h) => h.rawType === "Recalled")?.note;
+  const recallEvent = history.find((h) => h.rawType === "Recalled");
 
   return (
     <div className="w-full flex flex-col items-center gap-6 text-center">
@@ -178,7 +212,13 @@ function ConsumerLookup({ jumpToBatchId }) {
           {batch.status === 2 && (
             <div className="bg-red-700 text-white px-6 py-3 text-sm">
               <p className="font-semibold">This batch has been recalled.</p>
-              {recallReason && <p className="mt-1">Reason: {recallReason}</p>}
+              {recallEvent?.note && <p className="mt-1">Reason: {recallEvent.note}</p>}
+              {recallEvent?.fileUrl && (
+                <a href={recallEvent.fileUrl} target="_blank" rel="noreferrer"
+                  className="inline-block mt-1 font-semibold underline decoration-2 underline-offset-4">
+                  View recall report
+                </a>
+              )}
             </div>
           )}
 
@@ -222,11 +262,11 @@ function ConsumerLookup({ jumpToBatchId }) {
             <dl className="text-xs flex flex-col gap-3 border-t border-yellow-300 pt-4">
               <Row label="Harvested by">
                 <RoleBadge role="Beekeeper" />
-                <span className="font-mono break-all">{batch.beekeeper}</span>
+                <Hash value={batch.beekeeper} kind="address" />
               </Row>
               {batch.txHash && (
                 <Row label="Transaction">
-                  <span className="font-mono break-all">{batch.txHash}</span>
+                  <Hash value={batch.txHash} kind="tx" />
                 </Row>
               )}
             </dl>
@@ -275,7 +315,7 @@ function ConsumerLookup({ jumpToBatchId }) {
                         <dl className="text-xs flex flex-col gap-3 mt-4 pt-3 border-t border-yellow-300">
                           <Row label="Logged by">
                             <RoleBadge role={ev.role} />
-                            <span className="font-mono break-all">{ev.actor}</span>
+                            <Hash value={ev.actor} kind="address" />
                           </Row>
                           {ev.hasDoc && (
                             <Row label="Document hash (SHA-256)">
@@ -284,7 +324,7 @@ function ConsumerLookup({ jumpToBatchId }) {
                           )}
                           {ev.txHash && (
                             <Row label="Transaction">
-                              <span className="font-mono break-all">{ev.txHash}</span>
+                              <Hash value={ev.txHash} kind="tx" />
                             </Row>
                           )}
                         </dl>

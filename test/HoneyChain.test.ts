@@ -153,7 +153,7 @@ describe("HoneyChain", function () {
 
   it("should let admin recall a batch, record the reason, and block further events", async function () {
     const { honeyChain, admin, lab } = await setupBatch();
-    await honeyChain.connect(admin).recallBatch(1, "Contamination report");
+    await honeyChain.connect(admin).recallBatch(1, "Contamination report", ethers.ZeroHash);
 
     const [batch, history] = await honeyChain.getBatchDetails(1);
     expect(batch.status).to.equal(Status.Recalled);
@@ -168,7 +168,7 @@ describe("HoneyChain", function () {
   it("should NOT allow a non-admin to recall a batch", async function () {
     const { honeyChain, lab } = await setupBatch();
     await expect(
-      honeyChain.connect(lab).recallBatch(1, "nope")
+      honeyChain.connect(lab).recallBatch(1, "nope", ethers.ZeroHash)
     ).to.be.revertedWith("Only admin can perform this action");
   });
 
@@ -179,5 +179,31 @@ describe("HoneyChain", function () {
 
     const [, history] = await honeyChain.getBatchDetails(1);
     expect(history[0].docHash).to.equal(docHash);
+  });
+
+    it("should store a recall report hash on-chain", async function () {
+    const { honeyChain, admin } = await setupBatch();
+    const reportHash = ethers.id("recall-report.pdf contents");
+    await honeyChain.connect(admin).recallBatch(1, "See report", reportHash);
+
+    const [, history] = await honeyChain.getBatchDetails(1);
+    expect(history[history.length - 1].docHash).to.equal(reportHash);
+  });
+
+  it("should let admin hand over the admin role", async function () {
+    const { honeyChain, admin, outsider, beekeeper } = await deployFixture();
+    await honeyChain.connect(admin).transferAdmin(outsider.address);
+    expect(await honeyChain.admin()).to.equal(outsider.address);
+
+    await expect(
+      honeyChain.connect(admin).registerParticipant(beekeeper.address, Role.Beekeeper)
+    ).to.be.revertedWith("Only admin can perform this action");
+  });
+
+  it("should NOT allow a non-admin to transfer the admin role", async function () {
+    const { honeyChain, outsider } = await deployFixture();
+    await expect(
+      honeyChain.connect(outsider).transferAdmin(outsider.address)
+    ).to.be.revertedWith("Only admin can perform this action");
   });
 });

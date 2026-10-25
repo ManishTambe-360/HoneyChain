@@ -10,6 +10,8 @@ async function main() {
   await honeyChain.waitForDeployment();
 
   const address = await honeyChain.getAddress();
+  const deployReceipt = await honeyChain.deploymentTransaction()?.wait();
+  console.log(`Deployed in block: ${deployReceipt?.blockNumber}`);
   console.log(`HoneyChain deployed to: ${address}`);
 
   const [deployer] = await ethers.getSigners();

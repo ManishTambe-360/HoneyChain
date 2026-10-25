@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Contract, JsonRpcProvider, getAddress } from "ethers";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
+import { CONTRACT_ADDRESS, CONTRACT_ABI, NETWORK } from "../contractConfig";
 import Spinner from "../components/Spinner";
 
 function BrowseBatches({ onSelectBatch }) {
@@ -17,7 +17,7 @@ function BrowseBatches({ onSelectBatch }) {
     setError("");
 
     try {
-      const provider = new JsonRpcProvider("http://127.0.0.1:8545");
+      const provider = new JsonRpcProvider(NETWORK.rpcUrl);
       const checksummedContractAddress = getAddress(CONTRACT_ADDRESS.toLowerCase());
       const contract = new Contract(checksummedContractAddress, CONTRACT_ABI, provider);
 

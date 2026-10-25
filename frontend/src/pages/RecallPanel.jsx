@@ -1,31 +1,63 @@
 import { useState } from "react";
-import { Contract, getAddress } from "ethers";
+import { Contract, getAddress, sha256, ZeroHash } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
 
 function RecallPanel({ connection }) {
   const [batchId, setBatchId] = useState("");
   const [reason, setReason] = useState("");
+  const [file, setFile] = useState(null);
   const [status, setStatus] = useState("");
   const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function uploadToIPFS() {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch("http://localhost:4000/upload", { method: "POST", body: formData });
+    if (!response.ok) throw new Error("IPFS upload failed");
+    return (await response.json()).ipfsHash;
+  }
 
   async function handleRecall(e) {
     e.preventDefault();
+    const form = e.target;
+    setBusy(true);
     setFailed(false);
-    setStatus("Waiting for confirmation in MetaMask...");
 
     try {
+      let finalReason = reason;
+      let docHash = ZeroHash;
+
+      if (file) {
+        setStatus("Fingerprinting and uploading the report...");
+        docHash = sha256(new Uint8Array(await file.arrayBuffer()));
+        const ipfsHash = await uploadToIPFS();
+        finalReason = `${reason} [IPFS: ${ipfsHash}]`;
+      }
+
+      setStatus("Waiting for confirmation in MetaMask...");
       const signer = await connection.provider.getSigner();
       const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, signer);
-      const tx = await contract.recallBatch(Number(batchId), reason);
+
+      const tx = await contract.recallBatch(Number(batchId), finalReason, docHash);
       setStatus("Transaction sent, waiting for it to be mined...");
       await tx.wait();
+
       setStatus(`Batch #${batchId} has been recalled.`);
       setBatchId("");
       setReason("");
+      setFile(null);
+      form.reset();
     } catch (err) {
       console.error(err);
       setFailed(true);
-      setStatus("Could not recall the batch. Check the batch ID and that it is not already recalled.");
+      setStatus(
+        err?.code === "ACTION_REJECTED"
+          ? "Transaction cancelled in MetaMask."
+          : "Could not recall the batch. Check the batch ID, that it is not already recalled, and that the upload server is running."
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -45,11 +77,17 @@ function RecallPanel({ connection }) {
         <div>
           <label className="text-sm font-medium text-gray-700">Reason</label>
           <input type="text" required value={reason} onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. Contamination report" className="w-full border border-gray-300 rounded px-3 py-2 mt-1" />
+            placeholder="e.g. Contamination found at the processing unit"
+            className="w-full border border-gray-300 rounded px-3 py-2 mt-1" />
         </div>
-        <button type="submit"
-          className="bg-red-700 text-white px-6 py-2 rounded-full font-semibold shadow-md hover:brightness-110 transition mt-2">
-          Recall batch
+        <div>
+          <label className="text-sm font-medium text-gray-700">Attach recall report (optional)</label>
+          <input type="file" onChange={(e) => setFile(e.target.files[0] || null)}
+            className="w-full border border-gray-300 rounded px-3 py-2 mt-1 text-sm bg-white" />
+        </div>
+        <button type="submit" disabled={busy}
+          className="bg-red-700 text-white px-6 py-2 rounded-full font-semibold shadow-md hover:brightness-110 transition mt-2 disabled:opacity-50">
+          {busy ? "Working..." : "Recall batch"}
         </button>
       </form>
 
