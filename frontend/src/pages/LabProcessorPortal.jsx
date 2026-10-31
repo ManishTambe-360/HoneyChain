@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Contract, getAddress, sha256, ZeroHash } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
+import { uploadFile } from "../api";
 
 const EVENTS_BY_ROLE = {
   Lab: ["QualityTested", "QualityFailed"],
@@ -9,6 +10,7 @@ const EVENTS_BY_ROLE = {
 };
 
 function readableError(err) {
+  if (err?.uploadError) return err.message;
   if (err?.code === "ACTION_REJECTED") return "Transaction cancelled in MetaMask.";
   const text = [err?.reason, err?.shortMessage, err?.message, err?.info?.error?.message, err?.info?.error?.data?.message]
     .filter(Boolean)
@@ -28,13 +30,7 @@ function LabProcessorPortal({ connection }) {
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  async function uploadToIPFS() {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch("http://localhost:4000/upload", { method: "POST", body: formData });
-    if (!response.ok) throw new Error("IPFS upload failed");
-    return (await response.json()).ipfsHash;
-  }
+  const uploadToIPFS = () => uploadFile(file);
 
   async function handleLogEvent(e) {
     e.preventDefault();

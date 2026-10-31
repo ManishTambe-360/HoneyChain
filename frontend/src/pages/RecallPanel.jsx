@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Contract, getAddress, sha256, ZeroHash } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contractConfig";
+import { uploadFile } from "../api";
 
 function RecallPanel({ connection }) {
   const [batchId, setBatchId] = useState("");
@@ -10,13 +11,7 @@ function RecallPanel({ connection }) {
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  async function uploadToIPFS() {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch("http://localhost:4000/upload", { method: "POST", body: formData });
-    if (!response.ok) throw new Error("IPFS upload failed");
-    return (await response.json()).ipfsHash;
-  }
+  const uploadToIPFS = () => uploadFile(file);
 
   async function handleRecall(e) {
     e.preventDefault();
@@ -52,9 +47,11 @@ function RecallPanel({ connection }) {
       console.error(err);
       setFailed(true);
       setStatus(
-        err?.code === "ACTION_REJECTED"
+        err?.uploadError
+          ? err.message
+          : err?.code === "ACTION_REJECTED"
           ? "Transaction cancelled in MetaMask."
-          : "Could not recall the batch. Check the batch ID, that it is not already recalled, and that the upload server is running."
+          : "Could not recall the batch. Check the batch ID and that it is not already recalled."
       );
     } finally {
       setBusy(false);
