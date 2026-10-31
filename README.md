@@ -18,7 +18,7 @@ This project includes:
 Make sure to have metamask account and Pinata API key
 and paste it in env folder in backend if there isnt one MAKE one and put content in it acc to the .env example file given and put port=4000
 
-###Deployed on Ploygon Amoy Testnet
+### Deployed on Ploygon Amoy Testnet
 RPC URL :- 
 ```shell
 https://polygon-amoy.drpc.org
