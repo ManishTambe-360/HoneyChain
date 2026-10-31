@@ -1,18 +1,18 @@
 // AUTO-GENERATED FILE. Do not edit manually.
 // Regenerate with: npx hardhat run scripts/exportAbi.ts
-export const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+export const CONTRACT_ADDRESS = "0xf4c18133292B8e6744d6a5164AFFd9c874618178";
 
 export const NETWORK = {
-  "name": "Hardhat Local",
-  "chainId": 31337,
-  "rpcUrl": "http://127.0.0.1:8545",
-  "explorerUrl": "",
+  "name": "Polygon Amoy",
+  "chainId": 80002,
+  "rpcUrl": "https://polygon-amoy.drpc.org",
+  "explorerUrl": "https://amoy.polygonscan.com",
   "currency": {
-    "name": "Ether",
-    "symbol": "ETH",
+    "name": "POL",
+    "symbol": "POL",
     "decimals": 18
   },
-  "deployBlock": 0
+  "deployBlock": 51610625
 };
 
 export const CONTRACT_ABI = [
