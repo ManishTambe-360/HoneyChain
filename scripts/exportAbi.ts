@@ -14,7 +14,7 @@ const NETWORKS: Record<string, any> = {
   amoy: {
     name: "Polygon Amoy",
     chainId: 80002,
-    rpcUrl: "https://polygon-amoy.drpc.org",
+    rpcUrl: "https://polygon-amoy-bor-rpc.publicnode.com",
     explorerUrl: "https://amoy.polygonscan.com",
     currency: { name: "POL", symbol: "POL", decimals: 18 },
   },

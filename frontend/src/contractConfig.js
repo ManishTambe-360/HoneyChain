@@ -5,7 +5,7 @@ export const CONTRACT_ADDRESS = "0xf4c18133292B8e6744d6a5164AFFd9c874618178";
 export const NETWORK = {
   "name": "Polygon Amoy",
   "chainId": 80002,
-  "rpcUrl": "https://polygon-amoy.drpc.org",
+  "rpcUrl": "https://polygon-amoy-bor-rpc.publicnode.com",
   "explorerUrl": "https://amoy.polygonscan.com",
   "currency": {
     "name": "POL",

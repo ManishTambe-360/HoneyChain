@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Contract, JsonRpcProvider, getAddress, sha256, ZeroHash } from "ethers";
 import { QRCodeSVG } from "qrcode.react";
 import { CONTRACT_ADDRESS, CONTRACT_ABI, NETWORK } from "../contractConfig";
@@ -14,6 +14,18 @@ function parseDetails(text) {
     note: text.replace(m[0], "").trim(),
     fileUrl: `https://gateway.pinata.cloud/ipfs/${m[1]}`,
   };
+}
+
+// Free public RPCs fail now and then. Retry briefly, unless the contract itself rejected the call.
+async function withRetry(fn, tries = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err?.code === "CALL_EXCEPTION" || attempt >= tries) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+    }
+  }
 }
 
 // Public RPCs often cap how many blocks a log search may cover.
@@ -74,6 +86,7 @@ function ConsumerLookup({ jumpToBatchId }) {
   const [status, setStatus] = useState("");
   const [searchedId, setSearchedId] = useState("");
   const [checks, setChecks] = useState({});
+  const latestRequest = useRef(0);
 
   useEffect(() => {
     if (jumpToBatchId) {
@@ -103,6 +116,12 @@ function ConsumerLookup({ jumpToBatchId }) {
 
   async function loadBatch(rawId, silent = false) {
     const id = Number(rawId);
+    const myRequest = ++latestRequest.current;
+
+    // A reverted call means the batch does not exist. Anything else is a connection problem.
+    const isMissingBatch = (err) =>
+      err?.code === "CALL_EXCEPTION" || String(err?.message || "").includes("Batch does not exist");
+
     if (!silent) {
       setStatus("loading");
       setBatch(null);
@@ -110,20 +129,31 @@ function ConsumerLookup({ jumpToBatchId }) {
       setChecks({});
     }
 
+    const provider = new JsonRpcProvider(NETWORK.rpcUrl);
     try {
-      const provider = new JsonRpcProvider(NETWORK.rpcUrl);
       const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
 
-      const [b, events] = await contract.getBatchDetails(id);
+      // Stage 1: the essentials. If this fails, say why.
+      let b, events;
+      try {
+        [b, events] = await withRetry(() => contract.getBatchDetails(id));
+      } catch (err) {
+        console.error(err);
+        if (!silent) setStatus(isMissingBatch(err) ? "notfound" : "error");
+        return;
+      }
 
-      const [eventLogs, createdLogs] = await Promise.all([
-        getLogs(provider, contract, contract.filters.EventLogged(id)),
-        getLogs(provider, contract, contract.filters.BatchCreated(id)),
-      ]);
+      // Look up each distinct wallet's role once, one request at a time
+      const roleByActor = {};
+      for (const actor of new Set(events.map((ev) => ev.actor))) {
+        try {
+          roleByActor[actor] = ROLE_NAMES[Number(await withRetry(() => contract.roles(actor)))];
+        } catch {
+          roleByActor[actor] = "Participant";
+        }
+      }
 
-      const roles = await Promise.all(
-        events.map(async (ev) => ROLE_NAMES[Number(await contract.roles(ev.actor))])
-      );
+      if (myRequest !== latestRequest.current) return;
 
       setBatch({
         location: b.apiaryLocation,
@@ -134,17 +164,17 @@ function ConsumerLookup({ jumpToBatchId }) {
         beekeeper: b.beekeeper,
         stage: Number(b.stage),
         status: Number(b.status),
-        txHash: createdLogs[0]?.transactionHash || "",
+        txHash: "",
       });
 
       setHistory(
-        events.map((ev, i) => ({
+        events.map((ev) => ({
           rawType: ev.eventType,
           type: ev.eventType.replace(/([a-z])([A-Z])/g, "$1 $2"),
           actor: ev.actor,
-          role: ev.eventType === "Recalled" ? "Admin" : roles[i],
+          role: ev.eventType === "Recalled" ? "Admin" : roleByActor[ev.actor],
           time: new Date(Number(ev.timestamp) * 1000).toLocaleString(),
-          txHash: eventLogs.length === events.length ? eventLogs[i].transactionHash : "",
+          txHash: "",
           docHash: ev.docHash,
           hasDoc: ev.docHash !== ZeroHash,
           ...parseDetails(ev.details),
@@ -153,10 +183,22 @@ function ConsumerLookup({ jumpToBatchId }) {
 
       setSearchedId(id.toString());
       setStatus("");
+
+      // Stage 2: transaction hashes. Nice to have, so a failure here never hides the batch.
+      try {
+        const eventLogs = await getLogs(provider, contract, contract.filters.EventLogged(id));
+        const createdLogs = await getLogs(provider, contract, contract.filters.BatchCreated(id));
+        if (myRequest !== latestRequest.current) return;
+
+        setBatch((prev) => (prev ? { ...prev, txHash: createdLogs[0]?.transactionHash || "" } : prev));
+        if (eventLogs.length === events.length) {
+          setHistory((prev) => prev.map((h, i) => ({ ...h, txHash: eventLogs[i].transactionHash })));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    } finally {
       provider.destroy();
-    } catch (err) {
-      console.error(err);
-      if (!silent) setStatus("notfound");
     }
   }
 
@@ -194,6 +236,11 @@ function ConsumerLookup({ jumpToBatchId }) {
       {status === "notfound" && (
         <p className="text-sm text-red-700">
           No batch found with that number. Check the number on the jar and try again.
+        </p>
+      )}
+      {status === "error" && (
+        <p className="text-sm text-red-700 max-w-md">
+          Could not read the blockchain right now. The free network connection may be busy, so please try again in a moment.
         </p>
       )}
       {!batch && !status && (
