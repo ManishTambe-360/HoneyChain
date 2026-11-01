@@ -17,7 +17,7 @@ function BrowseBatches({ onSelectBatch }) {
     setError("");
 
     try {
-      const provider = new JsonRpcProvider(NETWORK.rpcUrl);
+      const provider = new JsonRpcProvider(NETWORK.rpcUrl, undefined, { batchMaxCount: 1 });
       const checksummedContractAddress = getAddress(CONTRACT_ADDRESS.toLowerCase());
       const contract = new Contract(checksummedContractAddress, CONTRACT_ABI, provider);
 

@@ -102,7 +102,7 @@ function ConsumerLookup({ jumpToBatchId }) {
   // Live updates: refresh whenever a new event is logged for the open batch
   useEffect(() => {
     if (!searchedId) return;
-    const provider = new JsonRpcProvider(NETWORK.rpcUrl);
+    const provider = new JsonRpcProvider(NETWORK.rpcUrl, undefined, { batchMaxCount: 1 });
     const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
     contract.on("EventLogged", (bid) => {
       if (Number(bid) === Number(searchedId)) loadBatch(searchedId, true);
@@ -129,7 +129,7 @@ function ConsumerLookup({ jumpToBatchId }) {
       setChecks({});
     }
 
-    const provider = new JsonRpcProvider(NETWORK.rpcUrl);
+    const provider = new JsonRpcProvider(NETWORK.rpcUrl, undefined, { batchMaxCount: 1 });
     try {
       const contract = new Contract(getAddress(CONTRACT_ADDRESS.toLowerCase()), CONTRACT_ABI, provider);
 
